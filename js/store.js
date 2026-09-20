@@ -9,6 +9,7 @@ const defaultState = () => ({
     name: '', sex: 'male', age: 33, heightCm: 173, weightKg: 80,
     goal: 'lose_fat', segmentId: 's160', templateId: 'int_a',
     servingsMargin: 2, // cook for 2 people (user + wife)
+    lowCarb: false,    // low-carb meal plan for fat-loss plateaus
   },
   // top-set weight (kg) per main lift + independent back-off weight
   lifts: {

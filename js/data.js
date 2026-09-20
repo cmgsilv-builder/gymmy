@@ -201,6 +201,7 @@ const RECIPES = {
       { item: 'old-fashioned rolled oats', g: 100, raw: true },
       { item: 'chocolate whey protein', scoops: 1 },
       { item: 'frozen blueberries', g: 100 },
+      { item: 'unsalted nut butter (almond/peanut)', g: 16, unless: 's160' },
       { item: 'liquid egg whites', ml: 240 },
       { item: 'sugar-free maple syrup', ml: 30 },
       { item: 'pinch of salt', g: 0 },
@@ -234,6 +235,17 @@ const RECIPES = {
     name: 'Whey Protein', time: '1 min', macros: { p: 24, c: 3, f: 1, kcal: 120 },
     ingredients: [{ item: 'chocolate whey protein', scoops: 1 }, { item: 'water', ml: 300 }],
     steps: ['Shake with water.'],
+  },
+  eggswhey: {
+    name: 'Eggs & Whey', time: '5 min', macros: { p: 50, c: 6, f: 1, kcal: 235 },
+    ingredients: [
+      { item: 'liquid egg whites', ml: 240 },
+      { item: 'pinch of salt', g: 0 },
+      { item: 'sugar-free maple syrup', ml: 30 },
+      { item: 'chocolate whey protein', scoops: 1 },
+      { item: 'water', ml: 300 },
+    ],
+    steps: ['Cook egg whites with salt in a nonstick pan, covered.', 'Shake whey with water.', 'Add sugar-free maple to the eggs.'],
   },
   preworkout: {
     name: 'Pre-Workout Drink', time: '2 min', macros: { p: 26, c: 25, f: 1, kcal: 205 },

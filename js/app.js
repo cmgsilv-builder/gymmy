@@ -204,7 +204,9 @@ function renderNutrition() {
       <div class="muted small" style="margin-top:6px">Carbs ${dm.c} g · Fat ${dm.f} g · all amounts raw/dry</div>
     </div>
     <div class="alert info">🔀 Weigh-in stalled 2 weeks? Move up a row for fewer calories.
-      <button class="btn sm" onclick="go('settings')">Change row</button></div>`;
+      <button class="btn sm" onclick="go('settings')">Change row</button></div>
+    <div class="alert ${state().profile.lowCarb ? 'warn' : 'ok'}">🥩 <b>Low-carb plan</b> — ${state().profile.lowCarb ? 'ON (rice removed, for a plateau)' : 'off'}.
+      <button class="btn sm" onclick="toggleLowCarb()">${state().profile.lowCarb ? 'Back to normal plan' : 'Use low-carb plan'}</button></div>`;
 
   meals.forEach((meal) => {
     if (meal.choice) {
@@ -233,6 +235,11 @@ function recipeBlock(r) {
     ${r.note ? `<div class="muted small">ℹ️ ${esc(r.note)}</div>` : ''}
     <details><summary class="muted small">Steps</summary><ol class="small">${r.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol></details>
   </div>`;
+}
+function toggleLowCarb() {
+  state().profile.lowCarb = !state().profile.lowCarb;
+  save();
+  renderNutrition();
 }
 function openSwaps() {
   const groups = { fruit: '🍓 Fruit', protein: '🥩 Protein', carb: '🍚 Carb', veg: '🥦 Veg' };

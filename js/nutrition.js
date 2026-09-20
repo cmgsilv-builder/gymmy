@@ -10,21 +10,43 @@ function riceGrams() {
 }
 
 // Resolve one recipe into a display object (with segment rice + swaps applied).
-function resolveRecipe(id, half) {
+// opts: { noRice, scoops, macros } for low-carb / variant meals.
+function resolveRecipe(id, half, opts = {}) {
   const base = RECIPES[id];
-  const ings = base.ingredients.map((ing) => {
-    let g = ing.g, ml = ing.ml, scoops = ing.scoops, item = ing.item, unit = ing.unit;
-    if (g === 'segment') g = riceGrams();
-    if (half) { if (g) g = Math.round(g / 2); if (ml) ml = Math.round(ml / 2); if (scoops) scoops = scoops / 2; }
-    return { item, g, ml, scoops, unit, raw: ing.raw };
-  });
-  const m = base.macros; const macros = half
+  const seg = state().profile.segmentId;
+  let ings = base.ingredients
+    .filter((ing) => !(ing.unless && ing.unless === seg))   // e.g. no nut butter at 160–180
+    .map((ing) => {
+      let g = ing.g, ml = ing.ml, scoops = ing.scoops, item = ing.item, unit = ing.unit;
+      if (g === 'segment') g = riceGrams();
+      if (opts.scoops && scoops != null) scoops = opts.scoops;
+      if (half) { if (g) g = Math.round(g / 2); if (ml) ml = Math.round(ml / 2); if (scoops) scoops = scoops / 2; }
+      return { item, g, ml, scoops, unit, raw: ing.raw };
+    });
+  if (opts.noRice) ings = ings.filter((i) => !/rice/i.test(i.item));
+  const m = base.macros;
+  const macros = opts.macros ? opts.macros : (half
     ? { p: Math.round(m.p / 2), c: Math.round(m.c / 2), f: Math.round(m.f / 2), kcal: Math.round(m.kcal / 2) }
-    : m;
-  return { id, name: base.name + (half ? ' (½)' : ''), time: base.time, ings, macros, steps: base.steps, note: base.note };
+    : m);
+  const nameSuffix = opts.nameSuffix || (half ? ' (½)' : '');
+  return { id, name: base.name + nameSuffix, time: base.time, ings, macros, steps: base.steps, note: opts.note || base.note };
+}
+
+// Low-carb meal plan (book p.239) — for fat-loss plateaus.
+function lowCarbMeals() {
+  const seg = SEGMENTS.find(s => s.id === state().profile.segmentId) || SEGMENTS[0];
+  const bbb = () => resolveRecipe('bbb', true, { noRice: true, nameSuffix: ' (no rice)',
+    macros: { p: 30, c: 20, f: 13, kcal: 310 }, note: 'Low-carb: no rice. To cut harder, drop the sweet potato too.' });
+  return { seg, lowCarb: true, meals: [
+    { slot: 1, recipe: resolveRecipe('eggswhey', false) },
+    { slot: 2, recipe: bbb() },
+    { slot: 3, recipe: resolveRecipe('whey', false, { scoops: 2, nameSuffix: ' (2 scoops)', macros: { p: 48, c: 6, f: 2, kcal: 240 } }) },
+    { slot: 4, recipe: bbb() },
+  ]};
 }
 
 function todaysMeals() {
+  if (state().profile.lowCarb) return lowCarbMeals();
   const { seg, meals } = mealPlanFor(state().profile.segmentId);
   const out = meals.map((meal) => {
     if (meal.choices) {
