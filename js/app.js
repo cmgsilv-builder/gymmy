@@ -30,8 +30,16 @@ function renderTrain() {
   if (!PENDING) PENDING = { workout: nextWorkout(deloadMode), results: {} };
   const wk = PENDING.workout;
 
+  const curTpl = TEMPLATES[st.profile.templateId];
   let html = `
     <div class="card">
+      <label class="field" style="margin-bottom:10px">
+        <span>Program</span>
+        <select onchange="setTemplate(this.value)">
+          ${Object.values(TEMPLATES).map(t => `<option value="${t.id}"${t.id === st.profile.templateId ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}
+        </select>
+      </label>
+      ${curTpl.desc ? `<div class="muted small" style="margin:-4px 0 10px">${esc(curTpl.desc)}</div>` : ''}
       <div class="row">
         <div style="display:flex;align-items:center;gap:8px">
           <h2 style="margin:0">Workout&nbsp;#</h2>
@@ -40,7 +48,7 @@ function renderTrain() {
         </div>
         <span class="chip">${new Date().toLocaleDateString()}</span>
       </div>
-      <div class="muted small" style="margin-top:4px">${esc(wk.template)} · ${esc(wk.dayName)}${wk.deload ? ' · DE-LOAD' : ''} · tap the number to change it</div>
+      <div class="muted small" style="margin-top:4px">${esc(wk.dayName)}${wk.deload ? ' · DE-LOAD' : ''} · tap the number to change it</div>
     </div>`;
 
   if (deloadSuggested() && !wk.deload) {
@@ -51,14 +59,20 @@ function renderTrain() {
   wk.blocks.forEach((b, bi) => {
     if (b.type === 'lift') {
       const res = PENDING.results[b.lift] || {};
-      html += `<div class="card">
-        <div class="row"><h3 style="margin:0">${esc(b.name)}</h3>
-          <label style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted)">Top set
-            <input type="number" step="${wk.deload ? '0.5' : LIFTS[b.lift].step}" value="${st.lifts[b.lift].top}"
-              onchange="setTop('${b.lift}', this.value)"
-              style="width:88px;font-weight:700;text-align:center;padding:7px 8px" aria-label="${esc(b.name)} top set kg"> kg</label>
-        </div>
-        <div class="muted small" style="margin:6px 0">Warm-ups &amp; back-off auto-calculate from the top set${wk.deload ? ' (de-load: 90%)' : ''}.</div>`;
+      if (b.light) {
+        html += `<div class="card">
+          <div class="row"><h3 style="margin:0">${esc(b.name)}</h3><span class="chip">light</span></div>
+          <div class="muted small" style="margin:6px 0">Auto: 85% of your ${esc(LIFTS[b.lift].name)} top set (${st.lifts[b.lift].top} kg). Keeps the movement fresh.</div>`;
+      } else {
+        html += `<div class="card">
+          <div class="row"><h3 style="margin:0">${esc(b.name)}</h3>
+            <label style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted)">Top set
+              <input type="number" step="${wk.deload ? '0.5' : LIFTS[b.lift].step}" value="${st.lifts[b.lift].top}"
+                onchange="setTop('${b.lift}', this.value)"
+                style="width:88px;font-weight:700;text-align:center;padding:7px 8px" aria-label="${esc(b.name)} top set kg"> kg</label>
+          </div>
+          <div class="muted small" style="margin:6px 0">Warm-ups &amp; back-off auto-calculate from the top set${wk.deload ? ' (de-load: 90%)' : ''}.</div>`;
+      }
       b.sets.forEach((s) => {
         html += `<div class="setrow"><span class="w">${esc(s.label)}</span>
           <span class="badge ${s.kind === 'top' ? 'top' : s.kind === 'backoff' ? 'now' : 'done'}">${s.kind}</span></div>`;
@@ -106,6 +120,17 @@ function setReps(lift, field, r) {
 let deloadMode = false;
 function startDeload() { deloadMode = true; PENDING = null; renderTrain(); }
 
+// Pick which program you're doing (dropdown in the Train view).
+function setTemplate(id) {
+  if (!TEMPLATES[id]) return;
+  state().profile.templateId = id;
+  state().nextDayKey = 'A';        // start on Day A of the chosen program
+  save();
+  deloadMode = false; PENDING = null;
+  $('#headerSub').textContent = TEMPLATES[id].name;
+  renderTrain();
+}
+
 // Edit a lift's top set inline → warm-ups + back-off recompute automatically.
 function setTop(lift, val) {
   const v = parseFloat(val);
@@ -121,8 +146,8 @@ function rebuildPendingSets() {
   const day = tpl.days.find(d => d.key === PENDING.workout.dayKey) || tpl.days[0];
   PENDING.workout.blocks.forEach((b) => {
     if (b.type !== 'lift') return;
-    const item = day.items.find(it => it.lift === b.lift);
-    if (item) b.sets = buildSets(b.lift, item.scheme, PENDING.workout.deload);
+    const item = day.items.find(it => it.lift === b.lift && !!it.light === !!b.light);
+    if (item) b.sets = buildSets(b.lift, item.scheme, PENDING.workout.deload, item.light);
   });
 }
 // Edit the workout number (you may not start at #1).

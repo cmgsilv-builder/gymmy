@@ -8,10 +8,13 @@ function roundToPlate(kg, step) {
 }
 
 // Build the concrete set list for one main lift.
-function buildSets(liftKey, scheme, deload = false) {
+function buildSets(liftKey, scheme, deload = false, light = false) {
   const lift = LIFTS[liftKey];
   const top = state().lifts[liftKey].top;
-  const topWeight = deload ? roundToPlate(top * 0.9, lift.step) : top;
+  // light day = 85% of the lift's top set; de-load = 90%; otherwise the top set itself.
+  const topWeight = light ? roundToPlate(top * 0.85, lift.step)
+                   : deload ? roundToPlate(top * 0.9, lift.step)
+                   : top;
 
   return scheme.map((s) => {
     if (s.bar) return { label: 'Bar × ' + s.reps, weight: BAR_KG, reps: s.reps, kind: 'warmup' };
@@ -20,9 +23,10 @@ function buildSets(liftKey, scheme, deload = false) {
     const weight = roundToPlate(topWeight * (s.pct / 100), lift.step);
     const kind = s.top ? 'top' : s.backoff ? 'backoff' : 'warmup';
     const repsLabel = s.range ? (s.range[0] + '–' + s.range[1] + (s.plus ? '+' : '')) : String(s.reps);
+    const setsLabel = (s.sets && s.sets > 1) ? ' × ' + s.sets + ' sets' : '';
     return {
-      label: weight + ' kg × ' + repsLabel + (s.optional ? ' (optional)' : ''),
-      weight, reps: s.reps, range: s.range || null, kind,
+      label: weight + ' kg × ' + repsLabel + setsLabel + (s.optional ? ' (optional)' : ''),
+      weight, reps: s.reps, range: s.range || null, kind, nsets: s.sets || 1,
       optional: !!s.optional, plus: !!s.plus,
     };
   }).filter(Boolean).concat(
@@ -38,7 +42,9 @@ function nextWorkout(deload = false) {
   const num = st.nextNumber || ((st.workouts.length || 0) + 1);
   const blocks = day.items.map((item) => {
     if (item.lift) {
-      return { type: 'lift', lift: item.lift, name: LIFTS[item.lift].name, sets: buildSets(item.lift, item.scheme, deload) };
+      return { type: 'lift', lift: item.lift, light: !!item.light,
+        name: (item.light ? 'Light ' : '') + LIFTS[item.lift].name,
+        sets: buildSets(item.lift, item.scheme, deload, item.light) };
     }
     // assistance: offer options (e.g. chin-ups or pulldowns)
     const opts = item.assist.map(k => ASSIST[k]);
@@ -74,7 +80,7 @@ function commitWorkout(workout, results) {
   const st = state();
   const coach = [];
   workout.blocks.forEach((b) => {
-    if (b.type !== 'lift') return;
+    if (b.type !== 'lift' || b.light) return;   // light days don't drive progression
     const r = results[b.lift];
     if (!r || r.topReps == null) return;
     if (workout.deload) { coach.push({ lift: b.lift, name: b.name, status: 'done', progress: false, advice: 'De-load set logged — recover and reset for next week.', topReps: r.topReps }); return; }

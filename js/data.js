@@ -41,6 +41,23 @@ const INT_DEADLIFT = [
   { pct: 85,  reps: 8, backoff: true, range: [5, 8], plus: true, optional: true },
 ];
 
+// Intermediate "light" days (Template B). Weight auto = 85% of that lift's top set.
+const INT_LIGHT_UPPER = [
+  { pct: 0,   label: 'Bar', reps: 10, bar: true },
+  { pct: 45,  reps: 5 },
+  { pct: 65,  reps: 3 },
+  { pct: 85,  reps: 2 },
+  { pct: 100, reps: 5, top: true, range: [5, 8] },
+  { pct: 85,  reps: 8, backoff: true, range: [5, 8], plus: true },
+];
+const INT_LIGHT_LOWER = [
+  { pct: 0,   label: 'Bar', reps: 10, bar: true },
+  { pct: 45,  reps: 5 },
+  { pct: 65,  reps: 3 },
+  { pct: 85,  reps: 2 },
+  { pct: 100, reps: 5, top: true, sets: 3 },   // 100% (=85% of heavy top) × 5 × 3 sets
+];
+
 // Assistance exercises (progressed by feel / reps, not % of a 1RM top set)
 const ASSIST = {
   chinups:   { name: 'Chin-ups',      scheme: '3 × AMRAP',  note: 'as many reps as possible' },
@@ -53,8 +70,41 @@ const ASSIST = {
 
 // Program templates. Each "day" lists its exercises in order.
 const TEMPLATES = {
+  novice_a: {
+    id: 'novice_a', name: 'Novice Template A', level: 'novice',
+    desc: 'Workouts 1–12 · 3×/week (A/B/A…)',
+    days: [
+      { key: 'A', name: 'Day A', items: [
+        { lift: 'squat',    scheme: NOVICE_MAIN },
+        { lift: 'bench',    scheme: NOVICE_MAIN },
+        { lift: 'deadlift', scheme: NOVICE_DEADLIFT },
+      ]},
+      { key: 'B', name: 'Day B', items: [
+        { lift: 'squat',    scheme: NOVICE_MAIN },
+        { lift: 'press',    scheme: NOVICE_MAIN },
+        { lift: 'deadlift', scheme: NOVICE_DEADLIFT },
+      ]},
+    ],
+  },
+  novice_b: {
+    id: 'novice_b', name: 'Novice Template B', level: 'novice',
+    desc: 'Workouts 13–24 · alternate deadlift & chin-ups',
+    days: [
+      { key: 'A', name: 'Day A', items: [
+        { lift: 'squat', scheme: NOVICE_MAIN },
+        { lift: 'bench', scheme: NOVICE_MAIN },
+        { assist: ['chinups', 'pulldowns'] },
+      ]},
+      { key: 'B', name: 'Day B', items: [
+        { lift: 'squat',    scheme: NOVICE_MAIN },
+        { lift: 'press',    scheme: NOVICE_MAIN },
+        { lift: 'deadlift', scheme: NOVICE_DEADLIFT },
+      ]},
+    ],
+  },
   novice_c: {
     id: 'novice_c', name: 'Novice Template C', level: 'novice',
+    desc: 'Workouts 25+ · reduced squat frequency',
     days: [
       { key: 'A', name: 'Day A', items: [
         { lift: 'squat',  scheme: NOVICE_MAIN },
@@ -84,6 +134,33 @@ const TEMPLATES = {
         { lift: 'deadlift', scheme: INT_DEADLIFT },
         { assist: ['rows'] },
         { assist: ['curls'] },
+        { assist: ['lateral'] },
+      ]},
+    ],
+  },
+  int_b: {
+    id: 'int_b', name: 'Intermediate Template B', level: 'intermediate',
+    desc: '4 workouts · upper/lower · light days = 85% of the heavy day',
+    days: [
+      { key: 'A', name: 'Day A (upper)', items: [
+        { lift: 'bench', scheme: INT_MAIN },
+        { lift: 'press', scheme: INT_LIGHT_UPPER, light: true },
+        { assist: ['ltes'] },
+      ]},
+      { key: 'B', name: 'Day B (lower)', items: [
+        { lift: 'squat',    scheme: INT_MAIN },
+        { lift: 'deadlift', scheme: INT_LIGHT_LOWER, light: true },
+        { assist: ['chinups', 'pulldowns'] },
+      ]},
+      { key: 'C', name: 'Day C (upper)', items: [
+        { lift: 'press', scheme: INT_MAIN },
+        { lift: 'bench', scheme: INT_LIGHT_UPPER, light: true },
+        { assist: ['curls'] },
+      ]},
+      { key: 'D', name: 'Day D (lower)', items: [
+        { lift: 'deadlift', scheme: INT_DEADLIFT },
+        { lift: 'squat',    scheme: INT_LIGHT_LOWER, light: true },
+        { assist: ['rows'] },
         { assist: ['lateral'] },
       ]},
     ],
