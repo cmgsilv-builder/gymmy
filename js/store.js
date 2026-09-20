@@ -18,6 +18,7 @@ const defaultState = () => ({
     deadlift: { top: 120, backoff: 102.5 },
   },
   nextDayKey: 'A',          // which day is up next (alternates A/B)
+  nextNumber: 1,            // number of the next workout (editable — you may not start at 1)
   workouts: [],             // logged workouts, each with an incrementing number
   weights: [],              // [{date, kg}]
   checkpoints: [],          // [{id, date, weekLabel, weightKg, photos:{front,side,back}(bool)}]

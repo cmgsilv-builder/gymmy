@@ -33,10 +33,14 @@ function renderTrain() {
   let html = `
     <div class="card">
       <div class="row">
-        <div><h2>Workout #${wk.number}</h2>
-          <div class="muted small">${esc(wk.template)} · ${esc(wk.dayName)}${wk.deload ? ' · DE-LOAD' : ''}</div></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <h2 style="margin:0">Workout&nbsp;#</h2>
+          <input type="number" min="1" value="${wk.number}" onchange="setNumber(this.value)"
+            style="width:78px;font-size:1.3rem;font-weight:700;padding:6px 8px;text-align:center" aria-label="workout number">
+        </div>
         <span class="chip">${new Date().toLocaleDateString()}</span>
       </div>
+      <div class="muted small" style="margin-top:4px">${esc(wk.template)} · ${esc(wk.dayName)}${wk.deload ? ' · DE-LOAD' : ''} · tap the number to change it</div>
     </div>`;
 
   if (deloadSuggested() && !wk.deload) {
@@ -47,7 +51,14 @@ function renderTrain() {
   wk.blocks.forEach((b, bi) => {
     if (b.type === 'lift') {
       const res = PENDING.results[b.lift] || {};
-      html += `<div class="card"><h3>${esc(b.name)}</h3>`;
+      html += `<div class="card">
+        <div class="row"><h3 style="margin:0">${esc(b.name)}</h3>
+          <label style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted)">Top set
+            <input type="number" step="${wk.deload ? '0.5' : LIFTS[b.lift].step}" value="${st.lifts[b.lift].top}"
+              onchange="setTop('${b.lift}', this.value)"
+              style="width:88px;font-weight:700;text-align:center;padding:7px 8px" aria-label="${esc(b.name)} top set kg"> kg</label>
+        </div>
+        <div class="muted small" style="margin:6px 0">Warm-ups &amp; back-off auto-calculate from the top set${wk.deload ? ' (de-load: 90%)' : ''}.</div>`;
       b.sets.forEach((s) => {
         html += `<div class="setrow"><span class="w">${esc(s.label)}</span>
           <span class="badge ${s.kind === 'top' ? 'top' : s.kind === 'backoff' ? 'now' : 'done'}">${s.kind}</span></div>`;
@@ -94,6 +105,33 @@ function setReps(lift, field, r) {
 }
 let deloadMode = false;
 function startDeload() { deloadMode = true; PENDING = null; renderTrain(); }
+
+// Edit a lift's top set inline → warm-ups + back-off recompute automatically.
+function setTop(lift, val) {
+  const v = parseFloat(val);
+  if (isNaN(v) || v < BAR_KG) { renderTrain(); return; }
+  state().lifts[lift].top = v; save();
+  rebuildPendingSets();
+  renderTrain();
+}
+// Rebuild the set lists for the current workout after a weight change (keeps number, day, logged reps).
+function rebuildPendingSets() {
+  if (!PENDING) return;
+  const tpl = TEMPLATES[state().profile.templateId];
+  const day = tpl.days.find(d => d.key === PENDING.workout.dayKey) || tpl.days[0];
+  PENDING.workout.blocks.forEach((b) => {
+    if (b.type !== 'lift') return;
+    const item = day.items.find(it => it.lift === b.lift);
+    if (item) b.sets = buildSets(b.lift, item.scheme, PENDING.workout.deload);
+  });
+}
+// Edit the workout number (you may not start at #1).
+function setNumber(val) {
+  const n = parseInt(val, 10);
+  if (isNaN(n) || n < 1) { renderTrain(); return; }
+  PENDING.workout.number = n; state().nextNumber = n; save();
+  renderTrain();
+}
 
 let _confirmFinish = false;
 function finishWorkout() {

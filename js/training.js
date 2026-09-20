@@ -11,15 +11,13 @@ function roundToPlate(kg, step) {
 function buildSets(liftKey, scheme, deload = false) {
   const lift = LIFTS[liftKey];
   const top = state().lifts[liftKey].top;
-  const backoff = state().lifts[liftKey].backoff;
   const topWeight = deload ? roundToPlate(top * 0.9, lift.step) : top;
 
   return scheme.map((s) => {
     if (s.bar) return { label: 'Bar × ' + s.reps, weight: BAR_KG, reps: s.reps, kind: 'warmup' };
-    let weight;
-    if (s.backoff) weight = deload ? null : backoff;         // back-off tracked independently
-    else weight = roundToPlate(topWeight * (s.pct / 100), lift.step);
     if (deload && s.backoff) return null;                    // no back-off on de-load
+    // warm-ups, top and back-off all auto-calculate as % of the top set
+    const weight = roundToPlate(topWeight * (s.pct / 100), lift.step);
     const kind = s.top ? 'top' : s.backoff ? 'backoff' : 'warmup';
     const repsLabel = s.range ? (s.range[0] + '–' + s.range[1] + (s.plus ? '+' : '')) : String(s.reps);
     return {
@@ -37,7 +35,7 @@ function nextWorkout(deload = false) {
   const st = state();
   const tpl = TEMPLATES[st.profile.templateId];
   const day = tpl.days.find(d => d.key === st.nextDayKey) || tpl.days[0];
-  const num = (st.workouts.length || 0) + 1;
+  const num = st.nextNumber || ((st.workouts.length || 0) + 1);
   const blocks = day.items.map((item) => {
     if (item.lift) {
       return { type: 'lift', lift: item.lift, name: LIFTS[item.lift].name, sets: buildSets(item.lift, item.scheme, deload) };
@@ -86,8 +84,7 @@ function commitWorkout(workout, results) {
     st._streaks[b.lift] = ev.streak;
     if (ev.progress) st.lifts[b.lift].top = roundToPlate(st.lifts[b.lift].top + LIFTS[b.lift].step, LIFTS[b.lift].step);
     if (ev.reset)   st.lifts[b.lift].top = roundToPlate(st.lifts[b.lift].top * 0.93, LIFTS[b.lift].step);
-    // back-off: hit top of 8+ => nudge back-off up
-    if (r.backoffReps != null && r.backoffReps >= 8) st.lifts[b.lift].backoff = roundToPlate(st.lifts[b.lift].backoff + LIFTS[b.lift].step, LIFTS[b.lift].step);
+    // back-off auto-calculates as 85% of the top set — nothing to track separately
     coach.push({ lift: b.lift, name: b.name, ...ev, topReps: r.topReps });
   });
 
@@ -102,6 +99,7 @@ function commitWorkout(workout, results) {
   const tpl = TEMPLATES[st.profile.templateId];
   const idx = tpl.days.findIndex(d => d.key === workout.dayKey);
   st.nextDayKey = tpl.days[(idx + 1) % tpl.days.length].key;
+  st.nextNumber = (workout.number || 0) + 1;   // count up from the (possibly edited) number
   save();
   return { record, coach };
 }
