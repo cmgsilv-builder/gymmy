@@ -1,11 +1,38 @@
 /* Gymmy — training engine. Generates sets from your top set and gives the
    book's advice (repeat / reset / switch template / de-load). */
 
-function roundToPlate(kg, step) {
-  // step = smallest total barbell increment (kg). Never below the empty bar.
-  const r = Math.round(kg / step) * step;
-  return Math.max(BAR_KG, Math.round(r * 100) / 100);
+// Every per-side load the owned plates can make (0.25 kg units → fewest plates).
+let _loads = null, _loadsKey = '';
+function loadTable() {
+  const inv = state().profile.plates || DEFAULT_PLATES;
+  const key = JSON.stringify(inv);
+  if (_loads && key === _loadsKey) return _loads;
+  let best = new Map([[0, []]]);
+  PLATE_SIZES.forEach((kg) => {
+    const u = Math.round(kg * 4), n = inv[kg] || 0;
+    const next = new Map(best);
+    best.forEach((plates, sum) => {
+      for (let c = 1; c <= n; c++) {
+        const t = sum + u * c, cand = plates.concat(Array(c).fill(kg));
+        if (!next.has(t) || next.get(t).length > cand.length) next.set(t, cand);
+      }
+    });
+    best = next;
+  });
+  _loadsKey = key;
+  return (_loads = best);
 }
+// Nearest total the plates can make. grid (kg/side) first rounds to friendlier warm-up jumps.
+function roundLoad(total, grid = 0) {
+  let side = Math.max(0, (total - BAR_KG) / 2);
+  if (grid) side = Math.round(side / grid) * grid;
+  const want = side * 4;
+  let bestU = 0;
+  loadTable().forEach((_, u) => { if (Math.abs(u - want) < Math.abs(bestU - want) - 1e-9) bestU = u; });
+  return BAR_KG + bestU / 2;
+}
+// Plates to put on each side for a total, e.g. [20, 5, 0.5].
+function platesFor(total) { return loadTable().get(Math.round((total - BAR_KG) * 2)) || null; }
 
 // Weights are entered/shown per side of the bar; the total is derived.
 const fmtKg = (n) => String(Math.round(n * 100) / 100);
@@ -20,24 +47,28 @@ function localDay(d = new Date()) {
 
 // Suggested top-set increase after hitting all reps (~2.5%, in whole plates).
 function progressStep(liftKey, top) {
-  const step = LIFTS[liftKey].step;
-  return Math.max(step, Math.round(top * PROGRESS_PCT / 100 / step) * step);
+  let next = roundLoad(top * (1 + PROGRESS_PCT / 100));
+  if (next <= top) {   // too small a jump to load → smallest loadable step up
+    const above = [...loadTable().keys()].map(u => BAR_KG + u / 2).filter(t => t > top);
+    next = above.length ? Math.min(...above) : top;
+  }
+  return next - top;
 }
 
 // Build the concrete set list for one main lift from its (heavy) top set.
 function buildSets(liftKey, scheme, deload = false, light = false, top = state().lifts[liftKey].top) {
-  const lift = LIFTS[liftKey];
   // light day = 85% of the lift's top set; de-load = 90%; otherwise the top set itself.
-  const topWeight = light ? roundToPlate(top * 0.85, lift.step)
-                   : deload ? roundToPlate(top * 0.9, lift.step)
+  const topWeight = light ? roundLoad(top * 0.85)
+                   : deload ? roundLoad(top * 0.9)
                    : top;
 
   const sets = scheme.map((s) => {
     if (s.bar) return { weight: BAR_KG, repsLabel: String(s.reps), reps: s.reps, kind: 'warmup', nsets: 1 };
     if (deload && (s.backoff || s.top)) return null;        // de-load: no back-off, top becomes 2×3
     // warm-ups, top and back-off all auto-calculate as % of the top set
-    const weight = roundToPlate(topWeight * (s.pct / 100), lift.step);
     const kind = s.top ? 'top' : s.backoff ? 'backoff' : 'warmup';
+    // warm-ups round to 1.25 kg/side jumps so they're quick to load
+    const weight = roundLoad(topWeight * (s.pct / 100), kind === 'warmup' ? 1.25 : 0);
     const repsLabel = s.range ? (s.range[0] + '–' + s.range[1] + (s.plus ? '+' : '')) : String(s.reps);
     return { weight, reps: s.reps, repsLabel, range: s.range || null, kind, nsets: s.sets || 1,
       optional: !!s.optional, plus: !!s.plus };
@@ -130,8 +161,8 @@ function commitWorkout(workout, results) {
     st._streaks = st._streaks || {};
     st._streaks[b.lift] = ev.streak;
     let next = base;
-    if (ev.progress) next = roundToPlate(base + inc, LIFTS[b.lift].step);
-    if (ev.reset)    next = roundToPlate(base * 0.93, LIFTS[b.lift].step);
+    if (ev.progress) next = base + inc;
+    if (ev.reset)    next = roundLoad(base * 0.93);
     st.lifts[b.lift].top = next;
   });
   // carry the top set even when reps weren't logged (non-backdated only)

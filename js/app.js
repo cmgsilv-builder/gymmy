@@ -90,13 +90,14 @@ function renderTrain() {
         html += `<div class="card">
           <div class="row"><h3 style="margin:0">${esc(b.name)}</h3>
             <label style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted)">Top set
-              <input type="number" step="1.25" min="0" inputmode="decimal" placeholder="bar"
+              <input type="number" step="0.25" min="0" inputmode="decimal" placeholder="bar"
                 value="${top > BAR_KG ? fmtKg(perSide(top)) : ''}"
                 onchange="setTop('${b.lift}', this.value)"
                 style="width:80px;font-weight:700;text-align:center;padding:7px 8px" aria-label="${esc(b.name)} top set kg per side"> kg/side</label>
           </div>
           <div class="muted small" style="margin:6px 0">Per side of a 20 kg bar (empty = bar only). Warm-ups &amp; back-off auto-calculate${wk.deload ? ' (de-load: 90%)' : ''}.</div>
-          ${lastTxt ? `<div class="small" style="margin-bottom:4px">${lastTxt}</div>` : ''}`;
+          ${lastTxt ? `<div class="small" style="margin-bottom:4px">${lastTxt}</div>` : ''}
+          ${platesFor(top)?.length ? `<div class="muted small">Top set per side: ${platesFor(top).join(' + ')}</div>` : ''}`;
       }
       b.sets.forEach((s) => {
         html += `<div class="setrow"><span class="w">${setLine(s)}</span>
@@ -123,7 +124,7 @@ function renderTrain() {
           <span class="muted small" style="width:42px">Set ${i + 1}</span>
           <label class="small" style="display:flex;align-items:center;gap:4px"><input type="number" min="0" inputmode="numeric" value="${s.reps ?? ''}"
             placeholder="reps" oninput="setAssistVal('${b.slot}',${i},'reps',this.value)" style="width:64px;text-align:center;padding:6px"> reps</label>
-          <label class="small" style="display:flex;align-items:center;gap:4px"><input type="number" min="0" step="1.25" inputmode="decimal" value="${s.kg ?? ''}"
+          <label class="small" style="display:flex;align-items:center;gap:4px"><input type="number" min="0" step="0.25" inputmode="decimal" value="${s.kg ?? ''}"
             placeholder="0" oninput="setAssistVal('${b.slot}',${i},'kg',this.value)" style="width:64px;text-align:center;padding:6px"> ${esc(ex.load)}</label>
         </div>`).join('')}
       </div>`;
@@ -219,7 +220,9 @@ function setDate(val) {
 function setTop(lift, val) {
   const side = val === '' ? 0 : parseFloat(val);
   if (isNaN(side) || side < 0) { renderTrain(); return; }
-  PENDING.workout.tops[lift] = fromPerSide(side);
+  const total = roundLoad(fromPerSide(side));
+  if (total !== fromPerSide(side)) toast(`Can't make ${fmtKg(side)} kg/side with your plates — using ${fmtKg(perSide(total))}`);
+  PENDING.workout.tops[lift] = total;
   keepNote(); rebuildPendingSets(); renderTrain();
 }
 // Rebuild the set lists for the current workout after a weight change (keeps number, day, logged reps).
@@ -262,7 +265,7 @@ function editStartingWeights() {
   const st = state();
   const html = Object.keys(LIFTS).map(k => `
     <label class="field"><span>${LIFTS[k].name} top set (kg per side, empty = bar only)</span>
-      <input type="number" step="1.25" min="0" inputmode="decimal" placeholder="bar" id="lw_${k}" value="${st.lifts[k].top > BAR_KG ? fmtKg(perSide(st.lifts[k].top)) : ''}"></label>`).join('');
+      <input type="number" step="0.25" min="0" inputmode="decimal" placeholder="bar" id="lw_${k}" value="${st.lifts[k].top > BAR_KG ? fmtKg(perSide(st.lifts[k].top)) : ''}"></label>`).join('');
   showModal('Your top-set weights', html + `<button class="btn primary block" onclick="saveWeights()">Save</button>`);
 }
 function saveWeights() {
@@ -270,7 +273,7 @@ function saveWeights() {
   Object.keys(LIFTS).forEach(k => {
     const raw = $('#lw_' + k).value;
     const side = raw === '' ? 0 : parseFloat(raw);
-    if (!isNaN(side) && side >= 0) st.lifts[k].top = fromPerSide(side);
+    if (!isNaN(side) && side >= 0) st.lifts[k].top = roundLoad(fromPerSide(side));
   });
   save(); closeModal(); PENDING = null; renderTrain();
 }
@@ -432,6 +435,16 @@ function renderCoach() {
 }
 
 /* ---------- SETTINGS / YOU ---------- */
+function savePlates() {
+  const plates = {};
+  PLATE_SIZES.forEach(kg => { const n = parseInt($('#pl_' + String(kg).replace('.', '_')).value, 10); plates[kg] = isNaN(n) || n < 0 ? 0 : n; });
+  const st = state();
+  st.profile.plates = plates;
+  Object.keys(LIFTS).forEach(k => st.lifts[k].top = roundLoad(st.lifts[k].top));
+  save(); PENDING = null;
+  toast('Plates saved');
+}
+
 function renderSettings() {
   const el = $('#view-settings');
   const p = state().profile;
@@ -453,6 +466,15 @@ function renderSettings() {
       <label class="field"><span>Training template</span>
         <select id="p_tpl">${Object.values(TEMPLATES).map(t => opt(t.id, t.name, p.templateId)).join('')}</select></label>
       <button class="btn primary block" onclick="saveProfile()">Save</button>
+    </div>
+
+    <div class="card"><h3>🏋️ My plates</h3>
+      <div class="muted small">How many of each plate per side of the bar. Gymmy only suggests weights you can load.</div>
+      <div class="grid2" style="grid-template-columns:1fr 1fr 1fr;margin-top:8px">
+        ${PLATE_SIZES.map(kg => `<label class="field"><span>${kg} kg</span>
+          <input type="number" min="0" inputmode="numeric" id="pl_${String(kg).replace('.', '_')}" value="${(p.plates || DEFAULT_PLATES)[kg] || 0}"></label>`).join('')}
+      </div>
+      <button class="btn primary block" onclick="savePlates()">Save plates</button>
     </div>
 
     <div class="card"><h3>📷 Weekly checkpoint</h3>

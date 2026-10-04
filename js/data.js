@@ -2,7 +2,9 @@
    All weights raw/dry. Units: kg for lifting, g/ml for food. */
 
 const BAR_KG = 20;          // Olympic barbell
-const PLATE_MIN_KG = 1.25;  // smallest plate the user owns (per side => 2.5 kg jump)
+// Plates the user owns. Counts are PER SIDE (editable under You).
+const PLATE_SIZES = [20, 15, 5, 2.5, 1.25, 0.5];
+const DEFAULT_PLATES = { 20: 2, 15: 2, 5: 2, 2.5: 2, 1.25: 2, 0.5: 2 };
 
 /* ---------- TRAINING ---------- */
 
@@ -168,14 +170,13 @@ const TEMPLATES = {
   },
 };
 
-// step = smallest total jump (kg) = one 1.25 kg plate per side.
 const LIFTS = {
-  squat:    { name: 'Squat',       step: 2.5 },
-  bench:    { name: 'Bench Press', step: 2.5 },
-  press:    { name: 'Press',       step: 2.5 },
-  deadlift: { name: 'Deadlift',    step: 2.5 },
+  squat:    { name: 'Squat' },
+  bench:    { name: 'Bench Press' },
+  press:    { name: 'Press' },
+  deadlift: { name: 'Deadlift' },
 };
-// Top-set increase after a successful session: ~2.5% of the top set, rounded to plates (min 1.25 kg/side).
+// Top-set increase after a successful session: ~2.5% of the top set, rounded to a load the plates can make.
 const PROGRESS_PCT = 2.5;
 
 /* ---------- NUTRITION ---------- */

@@ -1,7 +1,7 @@
 /* Gymmy service worker — offline app shell.
    Strategy: network-first for our own files (always get fresh code when online),
    fall back to cache when offline. Bump CACHE on release. */
-const CACHE = 'gymmy-v3';
+const CACHE = 'gymmy-v4';
 const ASSETS = [
   '.', 'index.html',
   'css/styles.css',
