@@ -59,13 +59,14 @@ const INT_LIGHT_LOWER = [
 ];
 
 // Assistance exercises (progressed by feel / reps, not % of a 1RM top set)
+// sets = rows to log; load = what the kg box means.
 const ASSIST = {
-  chinups:   { name: 'Chin-ups',      scheme: '3 × AMRAP',  note: 'as many reps as possible' },
-  pulldowns: { name: 'Lat-pulldowns', scheme: '1 × 8–10 + back-off 8–10+' },
-  ltes:      { name: 'LTEs (lying triceps ext.)', scheme: '1 × 8–10 + back-off 8–10+' },
-  rows:      { name: 'Rows',          scheme: '1 × 8–10 + back-off 8–10+' },
-  curls:     { name: 'Curls',         scheme: '1 × 8–10 + back-off 8–10+' },
-  lateral:   { name: 'Lateral raises',scheme: '2–3 × 10–15' },
+  chinups:   { name: 'Chin-ups',      scheme: '3 × AMRAP',  note: 'as many reps as possible', sets: 3, load: '+kg belt' },
+  pulldowns: { name: 'Lat-pulldowns', scheme: '1 × 8–10 + back-off 8–10+', sets: 2, load: 'kg' },
+  ltes:      { name: 'LTEs (lying triceps ext.)', scheme: '1 × 8–10 + back-off 8–10+', sets: 2, load: 'kg' },
+  rows:      { name: 'Rows',          scheme: '1 × 8–10 + back-off 8–10+', sets: 2, load: 'kg' },
+  curls:     { name: 'Curls',         scheme: '1 × 8–10 + back-off 8–10+', sets: 2, load: 'kg' },
+  lateral:   { name: 'Lateral raises',scheme: '2–3 × 10–15', sets: 3, load: 'kg' },
 };
 
 // Program templates. Each "day" lists its exercises in order.
@@ -167,12 +168,15 @@ const TEMPLATES = {
   },
 };
 
+// step = smallest total jump (kg) = one 1.25 kg plate per side.
 const LIFTS = {
-  squat:    { name: 'Squat',      step: 2.5,  micro: false },
-  bench:    { name: 'Bench Press',step: 1.25, micro: true },
-  press:    { name: 'Press',      step: 1.25, micro: true },
-  deadlift: { name: 'Deadlift',   step: 2.5,  micro: false },
+  squat:    { name: 'Squat',       step: 2.5 },
+  bench:    { name: 'Bench Press', step: 2.5 },
+  press:    { name: 'Press',       step: 2.5 },
+  deadlift: { name: 'Deadlift',    step: 2.5 },
 };
+// Top-set increase after a successful session: ~2.5% of the top set, rounded to plates (min 1.25 kg/side).
+const PROGRESS_PCT = 2.5;
 
 /* ---------- NUTRITION ---------- */
 // Bodyweight segments (book). Rows drive portion sizes. lb kept for reference.

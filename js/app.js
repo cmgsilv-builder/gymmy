@@ -24,6 +24,14 @@ function render(tab) {
 }
 
 /* ---------- TRAIN ---------- */
+// "40 kg × 5 (100 kg × 5 total)" — per side first, total in grey.
+function setLine(s) {
+  const reps = s.repsLabel + (s.nsets > 1 ? ' × ' + s.nsets + ' sets' : '') + (s.optional ? ' (optional)' : '');
+  const main = s.weight <= BAR_KG ? 'Bar × ' + reps : fmtKg(perSide(s.weight)) + ' kg × ' + reps;
+  return `${esc(main)} <span class="tot">(${fmtKg(s.weight)} kg × ${esc(reps)} total)</span>`;
+}
+function sideLabel(total) { return total <= BAR_KG ? 'bar only' : fmtKg(perSide(total)) + ' kg/side'; }
+
 function renderTrain() {
   const el = $('#view-train');
   const st = state();
@@ -40,15 +48,21 @@ function renderTrain() {
         </select>
       </label>
       ${curTpl.desc ? `<div class="muted small" style="margin:-4px 0 10px">${esc(curTpl.desc)}</div>` : ''}
+      <div class="repbtns" style="flex-wrap:wrap;margin-bottom:10px">
+        ${curTpl.days.map(d => `<button class="${d.key === wk.dayKey ? 'sel' : ''}" onclick="setDay('${d.key}')"
+          title="${esc(d.items.map(it => it.lift ? LIFTS[it.lift].name : ASSIST[it.assist[0]].name).join(', '))}">${esc(d.name)}</button>`).join('')}
+      </div>
       <div class="row">
         <div style="display:flex;align-items:center;gap:8px">
           <h2 style="margin:0">Workout&nbsp;#</h2>
           <input type="number" min="1" value="${wk.number}" onchange="setNumber(this.value)"
             style="width:78px;font-size:1.3rem;font-weight:700;padding:6px 8px;text-align:center" aria-label="workout number">
         </div>
-        <span class="chip">${new Date().toLocaleDateString()}</span>
+        <input type="date" value="${wk.date}" max="${localDay()}" onchange="setDate(this.value)"
+          style="width:auto;padding:6px 8px" aria-label="workout date">
       </div>
-      <div class="muted small" style="margin-top:4px">${esc(wk.dayName)}${wk.deload ? ' · DE-LOAD' : ''} · tap the number to change it</div>
+      <div class="muted small" style="margin-top:4px">${esc(wk.dayName)}: ${esc(wk.blocks.map(b => b.type === 'lift' ? b.name : (ASSIST[assistState(b).key].name)).join(', '))}${wk.deload ? ' · DE-LOAD' : ''}</div>
+      ${wk.date < localDay() ? `<div class="muted small">Past date — logged in history; only moves your current weights if it's your newest workout.</div>` : ''}
     </div>`;
 
   if (deloadSuggested() && !wk.deload) {
@@ -56,25 +70,36 @@ function renderTrain() {
       <button class="btn sm" onclick="startDeload()">Start de-load</button></div>`;
   }
 
-  wk.blocks.forEach((b, bi) => {
+  wk.blocks.forEach((b) => {
     if (b.type === 'lift') {
       const res = PENDING.results[b.lift] || {};
+      const top = wk.tops[b.lift];
       if (b.light) {
         html += `<div class="card">
           <div class="row"><h3 style="margin:0">${esc(b.name)}</h3><span class="chip">light</span></div>
-          <div class="muted small" style="margin:6px 0">Auto: 85% of your ${esc(LIFTS[b.lift].name)} top set (${st.lifts[b.lift].top} kg). Keeps the movement fresh.</div>`;
+          <div class="muted small" style="margin:6px 0">Auto: 85% of your ${esc(LIFTS[b.lift].name)} top set (${sideLabel(top)}). Keeps the movement fresh.</div>`;
       } else {
+        const last = lastLiftLog(b.lift);
+        let lastTxt = '';
+        if (last) {
+          const diff = top - last.topKg;
+          lastTxt = `Last time (#${last.number}): ${sideLabel(last.topKg)}${last.topReps != null ? ' × ' + last.topReps : ''} → `
+            + (diff > 0 ? `<b>+${fmtKg(diff / 2)} kg/side</b> today (≈${fmtKg(diff / last.topKg * 100)}%)`
+               : diff < 0 ? `lighter today (−${fmtKg(-diff / 2)} kg/side)` : 'same weight today');
+        }
         html += `<div class="card">
           <div class="row"><h3 style="margin:0">${esc(b.name)}</h3>
             <label style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted)">Top set
-              <input type="number" step="${wk.deload ? '0.5' : LIFTS[b.lift].step}" value="${st.lifts[b.lift].top}"
+              <input type="number" step="1.25" min="0" inputmode="decimal" placeholder="bar"
+                value="${top > BAR_KG ? fmtKg(perSide(top)) : ''}"
                 onchange="setTop('${b.lift}', this.value)"
-                style="width:88px;font-weight:700;text-align:center;padding:7px 8px" aria-label="${esc(b.name)} top set kg"> kg</label>
+                style="width:80px;font-weight:700;text-align:center;padding:7px 8px" aria-label="${esc(b.name)} top set kg per side"> kg/side</label>
           </div>
-          <div class="muted small" style="margin:6px 0">Warm-ups &amp; back-off auto-calculate from the top set${wk.deload ? ' (de-load: 90%)' : ''}.</div>`;
+          <div class="muted small" style="margin:6px 0">Per side of a 20 kg bar (empty = bar only). Warm-ups &amp; back-off auto-calculate${wk.deload ? ' (de-load: 90%)' : ''}.</div>
+          ${lastTxt ? `<div class="small" style="margin-bottom:4px">${lastTxt}</div>` : ''}`;
       }
       b.sets.forEach((s) => {
-        html += `<div class="setrow"><span class="w">${esc(s.label)}</span>
+        html += `<div class="setrow"><span class="w">${setLine(s)}</span>
           <span class="badge ${s.kind === 'top' ? 'top' : s.kind === 'backoff' ? 'now' : 'done'}">${s.kind}</span></div>`;
       });
       // rep loggers for top + back-off
@@ -84,9 +109,23 @@ function renderTrain() {
       if (boSet && !wk.deload) html += repLogger(b.lift, 'backoffReps', 'Back-off reps', boSet.range || [5,8], res.backoffReps, true);
       html += `</div>`;
     } else if (!b.hidden) {
-      html += `<div class="card"><h3>${esc(b.name)}</h3>
-        <div class="muted small">${esc(b.scheme)}</div>
-        ${b.options.length > 1 ? `<div class="muted small">Pick one you have gear for.</div>` : ''}
+      const a = assistState(b);
+      const ex = ASSIST[a.key];
+      const last = lastAssistLog(a.key);
+      const lastTxt = last && last.sets.some(s => s.reps != null)
+        ? 'Last time: ' + last.sets.filter(s => s.reps != null).map(s => s.reps + (s.kg ? ' @ ' + (ex.load.startsWith('+') ? '+' : '') + fmtKg(s.kg) + ' kg' : '')).join(', ') : '';
+      html += `<div class="card"><h3>${esc(ex.name)}</h3>
+        ${b.options.length > 1 ? `<div class="repbtns" style="margin:4px 0 6px">${b.options.map(k =>
+          `<button class="${k === a.key ? 'sel' : ''}" onclick="setAssist('${b.slot}','${k}')">${esc(ASSIST[k].name)}</button>`).join('')}</div>` : ''}
+        <div class="muted small">${esc(ex.scheme)}</div>
+        ${lastTxt ? `<div class="small" style="margin:4px 0">${esc(lastTxt)}</div>` : ''}
+        ${a.sets.map((s, i) => `<div class="setrow" style="gap:8px">
+          <span class="muted small" style="width:42px">Set ${i + 1}</span>
+          <label class="small" style="display:flex;align-items:center;gap:4px"><input type="number" min="0" inputmode="numeric" value="${s.reps ?? ''}"
+            placeholder="reps" oninput="setAssistVal('${b.slot}',${i},'reps',this.value)" style="width:64px;text-align:center;padding:6px"> reps</label>
+          <label class="small" style="display:flex;align-items:center;gap:4px"><input type="number" min="0" step="1.25" inputmode="decimal" value="${s.kg ?? ''}"
+            placeholder="0" oninput="setAssistVal('${b.slot}',${i},'kg',this.value)" style="width:64px;text-align:center;padding:6px"> ${esc(ex.load)}</label>
+        </div>`).join('')}
       </div>`;
     }
   });
@@ -96,10 +135,39 @@ function renderTrain() {
       <textarea id="wkNote" rows="2" placeholder="how it felt, tweaks…">${esc((PENDING.results._note)||'')}</textarea></label>
     <button class="btn primary block" onclick="finishWorkout()">Finish & log workout #${wk.number}</button>
     <div style="height:10px"></div>
-    <button class="btn ghost block sm" onclick="editStartingWeights()">Edit my top-set weights (kg)</button>`;
+    <button class="btn ghost block sm" onclick="editStartingWeights()">Edit my top-set weights (kg/side)</button>`;
 
   el.innerHTML = html;
 }
+
+// The logging state for an assistance slot: which option, and its sets (kg carried from last time).
+function assistState(b) {
+  PENDING.results.assist = PENDING.results.assist || {};
+  let a = PENDING.results.assist[b.slot];
+  if (!a) {
+    const choice = (state().assistChoice || {})[b.options.join('|')];
+    a = PENDING.results.assist[b.slot] = newAssist(b.options.includes(choice) ? choice : b.options[0]);
+  }
+  return a;
+}
+function newAssist(key) {
+  const last = lastAssistLog(key);
+  const sets = [];
+  for (let i = 0; i < ASSIST[key].sets; i++) sets.push({ reps: null, kg: last && last.sets[i] ? last.sets[i].kg : null });
+  return { key, sets };
+}
+function setAssist(slot, key) {
+  const b = PENDING.workout.blocks.find(x => x.slot === slot);
+  PENDING.results.assist[slot] = newAssist(key);
+  state().assistChoice = state().assistChoice || {};
+  state().assistChoice[b.options.join('|')] = key; save();
+  keepNote(); renderTrain();
+}
+function setAssistVal(slot, i, field, val) {
+  const v = val === '' ? null : parseFloat(val);
+  PENDING.results.assist[slot].sets[i][field] = isNaN(v) ? null : v;
+}
+function keepNote() { if ($('#wkNote')) PENDING.results._note = $('#wkNote').value; }
 
 function repLogger(lift, field, title, range, current, isBackoff) {
   const [lo, hi] = range;
@@ -115,7 +183,7 @@ function repLogger(lift, field, title, range, current, isBackoff) {
 function setReps(lift, field, r) {
   PENDING.results[lift] = PENDING.results[lift] || {};
   PENDING.results[lift][field] = r;
-  renderTrain();
+  keepNote(); renderTrain();
 }
 let deloadMode = false;
 function startDeload() { deloadMode = true; PENDING = null; renderTrain(); }
@@ -130,37 +198,51 @@ function setTemplate(id) {
   $('#headerSub').textContent = TEMPLATES[id].name;
   renderTrain();
 }
-
-// Edit a lift's top set inline → warm-ups + back-off recompute automatically.
-function setTop(lift, val) {
-  const v = parseFloat(val);
-  if (isNaN(v) || v < BAR_KG) { renderTrain(); return; }
-  state().lifts[lift].top = v; save();
-  rebuildPendingSets();
+// Pick which day of the template to log (keeps number, date and note).
+function setDay(key) {
+  keepNote();
+  const old = PENDING.workout;
+  const wk = nextWorkout(old.deload, key);
+  wk.number = old.number; wk.date = old.date;
+  PENDING = { workout: wk, results: { _note: PENDING.results._note } };
   renderTrain();
+}
+// Workout date (back-date to log past sessions).
+function setDate(val) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) { renderTrain(); return; }
+  keepNote();
+  PENDING.workout.date = val > localDay() ? localDay() : val;
+  renderTrain();
+}
+
+// Edit a lift's top set (kg per side) → warm-ups + back-off recompute automatically.
+function setTop(lift, val) {
+  const side = val === '' ? 0 : parseFloat(val);
+  if (isNaN(side) || side < 0) { renderTrain(); return; }
+  PENDING.workout.tops[lift] = fromPerSide(side);
+  keepNote(); rebuildPendingSets(); renderTrain();
 }
 // Rebuild the set lists for the current workout after a weight change (keeps number, day, logged reps).
 function rebuildPendingSets() {
   if (!PENDING) return;
-  const tpl = TEMPLATES[state().profile.templateId];
-  const day = tpl.days.find(d => d.key === PENDING.workout.dayKey) || tpl.days[0];
-  PENDING.workout.blocks.forEach((b) => {
-    if (b.type !== 'lift') return;
-    const item = day.items.find(it => it.lift === b.lift && !!it.light === !!b.light);
-    if (item) b.sets = buildSets(b.lift, item.scheme, PENDING.workout.deload, item.light);
+  const wk = PENDING.workout;
+  wk.blocks.forEach((b) => {
+    if (b.type === 'lift') b.sets = buildSets(b.lift, b.scheme, wk.deload, b.light, wk.tops[b.lift]);
   });
 }
 // Edit the workout number (you may not start at #1).
 function setNumber(val) {
   const n = parseInt(val, 10);
   if (isNaN(n) || n < 1) { renderTrain(); return; }
-  PENDING.workout.number = n; state().nextNumber = n; save();
+  keepNote();
+  PENDING.workout.number = n;
+  if (PENDING.workout.date >= localDay()) { state().nextNumber = n; save(); }
   renderTrain();
 }
 
 let _confirmFinish = false;
 function finishWorkout() {
-  PENDING.results._note = $('#wkNote') ? $('#wkNote').value : '';
+  keepNote();
   const missing = PENDING.workout.blocks.filter(b => b.type === 'lift' && (PENDING.results[b.lift]?.topReps == null));
   if (missing.length && !_confirmFinish) {
     _confirmFinish = true;
@@ -170,22 +252,26 @@ function finishWorkout() {
     return;
   }
   _confirmFinish = false;
-  commitWorkout(PENDING.workout, PENDING.results);
+  const { record } = commitWorkout(PENDING.workout, PENDING.results);
   deloadMode = false; PENDING = null;
-  toast('Workout logged 💪');
+  toast(record.backdated ? 'Past workout saved 📅' : 'Workout logged 💪');
   go('coach');
 }
 
 function editStartingWeights() {
   const st = state();
   const html = Object.keys(LIFTS).map(k => `
-    <label class="field"><span>${LIFTS[k].name} top set (kg)</span>
-      <input type="number" step="0.5" id="lw_${k}" value="${st.lifts[k].top}"></label>`).join('');
+    <label class="field"><span>${LIFTS[k].name} top set (kg per side, empty = bar only)</span>
+      <input type="number" step="1.25" min="0" inputmode="decimal" placeholder="bar" id="lw_${k}" value="${st.lifts[k].top > BAR_KG ? fmtKg(perSide(st.lifts[k].top)) : ''}"></label>`).join('');
   showModal('Your top-set weights', html + `<button class="btn primary block" onclick="saveWeights()">Save</button>`);
 }
 function saveWeights() {
   const st = state();
-  Object.keys(LIFTS).forEach(k => { const v = parseFloat($('#lw_' + k).value); if (!isNaN(v)) { st.lifts[k].top = v; st.lifts[k].backoff = Math.round(v * 0.85 / 1.25) * 1.25; } });
+  Object.keys(LIFTS).forEach(k => {
+    const raw = $('#lw_' + k).value;
+    const side = raw === '' ? 0 : parseFloat(raw);
+    if (!isNaN(side) && side >= 0) st.lifts[k].top = fromPerSide(side);
+  });
   save(); closeModal(); PENDING = null; renderTrain();
 }
 
@@ -279,7 +365,7 @@ function renderAnalytics() {
   html += `<div class="card"><h2>Strength (top set, kg)</h2>`;
   Object.keys(LIFTS).forEach(k => {
     const pts = (loadSeries[k] || []).map(p => ({ x: p.date, y: p.kg }));
-    html += `<h4 style="margin-top:10px">${LIFTS[k].name} <span class="muted small">now ${st.lifts[k].top} kg</span></h4>
+    html += `<h4 style="margin-top:10px">${LIFTS[k].name} <span class="muted small">now ${sideLabel(st.lifts[k].top)} (${fmtKg(st.lifts[k].top)} kg total)</span></h4>
       ${lineChart(pts, { unit: ' kg', label: k })}`;
   });
   html += `</div>`;
